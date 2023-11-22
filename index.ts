@@ -1,15 +1,17 @@
 import { config } from "dotenv";
 import { SmartContract, ThirdwebSDK } from "@thirdweb-dev/sdk";
-import { Goerli } from "@thirdweb-dev/chains";
+import { Sepolia } from "@thirdweb-dev/chains";
 import { SmartWallet } from "@thirdweb-dev/wallets";
 import { LocalWalletNode } from "@thirdweb-dev/wallets/evm/wallets/local-wallet-node";
 import { BaseContract } from "ethers";
 
 config();
 
-const chain = Goerli;
-const factoryAddress = "0x0EDfbA441f630E0D38F8d92C486EF0e9119E100a";
+const chain = Sepolia;
+const factoryAddress = "0xe0cc4a5de30b4ed5b31a17bdcdf697078bd9e952";
 const secretKey = process.env.THIRDWEB_SECRET_KEY as string;
+const tokenContractAddress = "0x0d9Cd5946Af387093d26d5aef196d40DD69ED82d";
+const editionContractAddress = "0x061e09d2392Cf771882E5a2C2F7fCEdB34885319";
 
 if (!secretKey) {
   throw new Error("No API Key found. Get one from https://thirdweb.com/dashboard");
@@ -43,16 +45,32 @@ const initializeSDK = async (smartWallet: SmartWallet) => {
   }
 };
 
-const performClaims = async (smartWallet: SmartWallet, tokenContract: SmartContract<BaseContract>, editionContract: SmartContract<BaseContract>) => {
+const performClaims = async (
+  smartWallet: SmartWallet, 
+  tokenContract?: SmartContract<BaseContract>, 
+  editionContract?: SmartContract<BaseContract>
+) => {
   try {
-    const tx1 = await tokenContract.erc20.claim.prepare(1);
-    const tx2 = await editionContract.erc1155.claim.prepare(0, 1);
-    const batchTx = await smartWallet.executeBatch([tx1, tx2]);
-    console.log("Claimed 1 ERC20 token & 1 Edition NFT, tx hash:", batchTx.receipt.transactionHash);
+    const userOperations = [
+      ...(tokenContract ? [await tokenContract.erc20.claim.prepare(1)] : []),
+      ...(editionContract ? [await editionContract.erc1155.claim.prepare(0, 1)] : [])
+    ];
+
+    if (userOperations.length === 0) {
+      console.log("No operations to perform");
+      return;
+    }
+
+    console.log("userOperations:", userOperations);
+
+    const batchTx = await smartWallet.executeBatch(userOperations);
+    console.log("Transaction hash:", batchTx.receipt.transactionHash);
+    return batchTx;
   } catch (error: any) {
     throw new Error("Failed to claim tokens: " + error.message);
   }
 };
+
 
 const main = async () => {
   try {
@@ -67,9 +85,9 @@ const main = async () => {
     console.log("Smart Account addr:", await sdk.wallet.getAddress());
     console.log("balance:", (await sdk.wallet.balance()).displayValue);
 
-    const tokenContract = await sdk.getContract("0xc54414e0E2DBE7E9565B75EFdC495c7eD12D3823");
-    const editionContract = await sdk.getContract("0x8096C71f400984C3C1B7F3a79Ab0C0EaC417b91c");
-    await performClaims(smartWallet, tokenContract, editionContract);
+    const tokenContract = await sdk.getContract(tokenContractAddress);
+    // const editionContract = await sdk.getContract(editionContractAddress);
+    await performClaims(smartWallet, tokenContract);
   } catch (error: any) {
     console.error(error.message);
   }
